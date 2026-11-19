@@ -1,0 +1,1 @@
+<?php require __DIR__.'/config.php'; redirect(!empty($_SESSION['authenticated'])?'dashboard.php':'login.php');

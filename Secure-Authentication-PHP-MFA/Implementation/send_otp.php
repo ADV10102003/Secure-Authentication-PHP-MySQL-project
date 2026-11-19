@@ -1,0 +1,10 @@
+<?php
+require __DIR__.'/config.php';if(empty($_SESSION['pending_user_id']))redirect('login.php');
+$s=$pdo->prepare('SELECT id,email FROM users WHERE id=?');$s->execute([(int)$_SESSION['pending_user_id']]);$u=$s->fetch();if(!$u){unset($_SESSION['pending_user_id']);redirect('login.php');}
+$pdo->prepare('UPDATE otp_codes SET used=1 WHERE user_id=? AND used=0')->execute([$u['id']]);
+$otp=(string)random_int(100000,999999);$hash=password_hash($otp,PASSWORD_DEFAULT);$exp=(new DateTimeImmutable('+5 minutes'))->format('Y-m-d H:i:s');
+$s=$pdo->prepare('INSERT INTO otp_codes(user_id,otp_hash,expires_at) VALUES(?,?,?)');$s->execute([$u['id'],$hash,$exp]);
+$mailSent=@mail($u['email'],'Secure Auth verification code',"Your code is {$otp}. It expires in 5 minutes.","From: no-reply@localhost\r\n");
+if(!DEMO_SHOW_OTP&&!$mailSent){$pdo->prepare('UPDATE otp_codes SET used=1 WHERE user_id=? AND used=0')->execute([$u['id']]);exit('Email is not configured. Configure SMTP before disabling demo mode.');}
+?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Verify</title><link rel="stylesheet" href="style.css"></head><body><main class="card"><h1>Second-factor verification</h1><p>Enter the six-digit code to finish signing in.</p><?php if(DEMO_SHOW_OTP):?><div class="alert warning"><b>LOCAL DEMO ONLY:</b> Your OTP is <strong><?=h($otp)?></strong>. Never display OTPs in production.</div><?php else:?><div class="alert success">Code sent to registered email.</div><?php endif;?>
+<form method="post" action="verify_otp.php"><input type="hidden" name="csrf_token" value="<?=h(csrf_token())?>"><label>6-digit OTP</label><input name="otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required><button>Verify and sign in</button></form><p><a href="logout.php">Cancel</a></p></main></body></html>
